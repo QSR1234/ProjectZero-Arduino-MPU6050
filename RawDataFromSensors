@@ -1,0 +1,37 @@
+//2’ complementary & sign shift, int16_t ,and type cast
+
+void recordAccelRegisters() {
+  // Step 1: Select MPU6050 at I2C address 0x68
+  Wire.beginTransmission(0x68);
+  // Step 2: Start reading at register 0x3B
+  Wire.write(0x3B);
+  // Step 3: Finish the write phase, retain I2C bus
+  if (Wire.endTransmission(false) != 0) {  
+// Wire.endTransmission(false) means we want to execute now but we don't want to end the transaction, and if it succeeds, it would return 0
+    return; // there’s a Communication error, 
+// the program returns to wherever that function was called.
+//It does not stop the entire Arduino program.  
+}
+  // Step 4: Request all 6 accelerometer bytes
+  if (Wire.requestFrom(0x68, 6) != 6) {
+    return; // Not enough data received in the buffer
+  }
+  // Step 5: Read X-axis data
+  uint8_t xHigh = Wire.read();
+  uint8_t xLow  = Wire.read();
+  // Step 6: Read Y-axis data
+  uint8_t yHigh = Wire.read();
+  uint8_t yLow  = Wire.read();
+
+  // Step 7: Read Z-axis data
+  uint8_t zHigh = Wire.read();
+  uint8_t zLow  = Wire.read();
+  // Step 8: Combine each pair into signed 16-bit data
+  accelX = (int16_t)(((uint16_t)xHigh << 8) | xLow);
+  accelY = (int16_t)(((uint16_t)yHigh << 8) | yLow);
+  accelZ = (int16_t)(((uint16_t)zHigh << 8) | zLow);
+
+  // Step 9: Process the raw readings
+  processAccelData();
+}
+
