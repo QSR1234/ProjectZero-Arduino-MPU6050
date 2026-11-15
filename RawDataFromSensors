@@ -1,37 +1,102 @@
-//2’ complementary & sign shift, int16_t ,and type cast
+#include <Wire.h>
+uint8_t xHigh, xLow, yHigh, yLow, zHigh, zLow;
+float xAcc, yAcc, zAcc;  // e.g. 1.2 g
+int16_t xAccRaw, yAccRaw, zAccRaw;
 
-void recordAccelRegisters() {
-  // Step 1: Select MPU6050 at I2C address 0x68
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);  //arduino tells PC that Let's get prepared and communicate.
+  Wire.begin();        //It tells MPU as well. they use I2C to communicate.
+  setupMPU();
+}
+
+void setupMPU() {
+  Wire.beginTransmission(0x68);  //I2C address of MPU with AD0->GND, this starts a transaction,
+  Wire.write(0x6B);              //chooose register
+  Wire.write(0b00000000);        //no sleep and using internal clock source
+  Wire.endTransmission();
+
+  Wire.write(0x1C);        //config accelerometer
+  Wire.write(0b00001000);  //set scale range to +-2g
+  Wire.endTransmission();
+
   Wire.beginTransmission(0x68);
-  // Step 2: Start reading at register 0x3B
-  Wire.write(0x3B);
-  // Step 3: Finish the write phase, retain I2C bus
-  if (Wire.endTransmission(false) != 0) {  
-// Wire.endTransmission(false) means we want to execute now but we don't want to end the transaction, and if it succeeds, it would return 0
-    return; // there’s a Communication error, 
-// the program returns to wherever that function was called.
-//It does not stop the entire Arduino program.  
+  Wire.write(0x1B);        //config gyroscope
+  Wire.write(0b00000000);  // +- 250 deg/s , about 40rpm
+  Wire.endTransmission();
 }
-  // Step 4: Request all 6 accelerometer bytes
-  if (Wire.requestFrom(0x68, 6) != 6) {
-    return; // Not enough data received in the buffer
+
+void processAccRawData() {
+  xAcc = xAccRaw / 16384.0;
+  yAcc = yAccRaw / 16384.0;
+  zAcc = zAccRaw / 16384.0;
+};
+
+void printData() {
+  Serial.print(" Acceleration (g):");
+  Serial.print(" X=");
+  Serial.print(xAcc);
+  Serial.print(" Y=");
+  Serial.print(yAcc);
+  Serial.print(" Z=");
+  Serial.println(zAcc);
+}
+
+void recordAccReg() {
+  Wire.beginTransmission(0x68);
+  Wire.write(0x3B);                        //choose the 1st register of accelerometer measurement
+  if (Wire.endTransmission(false) != 0) {  //check if there's a communication err
+    Serial.print("commu error!!");
+    return;
   }
-  // Step 5: Read X-axis data
-  uint8_t xHigh = Wire.read();
-  uint8_t xLow  = Wire.read();
-  // Step 6: Read Y-axis data
-  uint8_t yHigh = Wire.read();
-  uint8_t yLow  = Wire.read();
 
-  // Step 7: Read Z-axis data
-  uint8_t zHigh = Wire.read();
-  uint8_t zLow  = Wire.read();
-  // Step 8: Combine each pair into signed 16-bit data
-  accelX = (int16_t)(((uint16_t)xHigh << 8) | xLow);
-  accelY = (int16_t)(((uint16_t)yHigh << 8) | yLow);
-  accelZ = (int16_t)(((uint16_t)zHigh << 8) | zLow);
+  //start to read acc value from MPU
+  int received = Wire.requestFrom(0x68, 6);
+  //arduino requests data from MPU, data is stored in buffer ,and this returns the number of received bytes from MPU
+  if (received != 6) {
+    Serial.print("error in total number of bytes");
+    return;
+  }
 
-  // Step 9: Process the raw readings
-  processAccelData();
+  xHigh = Wire.read();  // arduino read 1 byte from buffer
+  xLow = Wire.read();
+  yHigh = Wire.read();
+  yLow = Wire.read();
+  zHigh = Wire.read();
+  zLow = Wire.read();
+
+  xAccRaw = (int16_t)((uint16_t)(xHigh << 8) | xLow);  //xHigh << 8 would become 16-bit, so using uint16_t
+  yAccRaw = (int16_t)((uint16_t)(yHigh << 8) | yLow);
+  zAccRaw = (int16_t)((uint16_t)(zHigh << 8) | zLow);
+
+  processAccRawData();
 }
 
+Void recordTempReg(){
+  Wire.beginTransmission(0x68);
+  Wire.write(0x41);
+  if(Wire.endTransmission(false) != 0){
+    Serial.print("communication error");
+    return;
+  }
+
+  if(Wire.requestFrom(0x68,2) != 2){
+    Serial.print("error in number of data bytes");
+    return;
+  }
+
+  uint8_t temperatureHigh, temperatureLow;
+  uint16_t temperatureRaw;
+  temperatureHigh = Wire.read();
+  temperatureLow = Wire.read();
+  temperatureRaw = (int16_t)((uint16_t)temperatureHigh << 8 | temperatureLow); 
+
+  
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+  recordAccReg();
+  printData();
+  delay(100);
+}
