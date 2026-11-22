@@ -1,0 +1,167 @@
+#include <Wire.h>
+#include<Servo.h>
+
+const int MpuAddr=0x68;
+float xAcc, yAcc, zAcc, xGyro,yGyro, zGyro;
+float xOffset, yOffset, zOffset;
+double pitchAngle, accPitchAngle;
+
+double PitchAngle=0;
+float elapsed,dt, now;
+float lastTime=0;
+const float weight=0.98;
+
+Servo servo_0;
+int signal=3;
+
+
+void writeReg(uint8_t addr, uint8_t value);
+void calcOffset();
+int16_t combination16(uint8_t higher, uint8_t lower);
+void readMpu();
+
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(115200);
+  Wire.begin();
+  setUpMpu(); 
+  elapsed=millis();
+
+  servo_0.attach(signal);
+ // servo_0.write(135);
+}
+
+void setUpMpu(){
+  //wk up MPU
+  writeReg(0x6B, 0b00000001);
+  //cfg acc scale range
+  writeReg(0x1C, 0b00000000);  //+-2g
+  //cfg gyro scale range
+  writeReg(0x1B, 0b00000000); //+-250 deg/s
+
+  // Set sample rate to 100 Hz
+// 1000 / (1 + 9) = 100 Hz
+  writeReg(0x19, 0x02);
+  calcOffset();
+}
+
+void loop() {
+  readMpu();
+  now = millis();
+  //subtracting original bias
+  xGyro -= xOffset;
+  yGyro -= yOffset;
+  zGyro -= zOffset;
+  xAcc -= 0.07;
+  yAcc -= 0.03;
+  zAcc -= 0.04;
+  
+  //estimate pitch angle by acc
+  accPitchAngle=atan2((double)xAcc, (double)zAcc)* (180/PI);
+
+  /*estimate pitch angle by gyro    */
+  if(lastTime==0){
+    dt = now-elapsed;
+  }
+  else{
+    dt=now-lastTime;
+  }
+  lastTime=now;
+  dt /= 1000.0;
+  //complementary filter.   to calibrate the drift of gyroscope accelerometer
+  pitchAngle= weight*(pitchAngle + yGyro*(-1)*dt) + (1-weight)*accPitchAngle;
+
+  //output to servo_0, stabilizing at 135deg
+  servo_0.write(100+pitchAngle-1);   //135 now,  30=>165  -30=>105
+
+  Serial.print("accPitchAngle: ");
+  Serial.print(accPitchAngle);
+  Serial.print("   PitchAngle: ");
+  Serial.print(pitchAngle);
+  Serial.print("   dt: ");
+  Serial.print(dt);
+  Serial.print("  / ");
+  Serial.print("Acc-x-y-z:  ");
+  Serial.print(xAcc);
+  Serial.print("      ");
+  Serial.print(yAcc);
+  Serial.print("      ");
+  Serial.print(zAcc);
+  Serial.print("      Gyro-x-y-z: ");
+  Serial.print(xGyro);
+  Serial.print("      ");
+  Serial.print(yGyro);
+  Serial.print("      ");
+  Serial.println(zGyro);
+
+  delay(10);
+
+}
+
+
+int16_t combination16(uint8_t higher, uint8_t lower){
+  higher = Wire.read();
+  lower = Wire.read();
+  int16_t rawData = (int16_t)((uint16_t)higher << 8 | lower);
+
+  return rawData;
+}
+
+void calcOffset(){
+  for(int i=0; i<1000; i++){
+    readMpu();
+    xOffset += xGyro; 
+    yOffset += yGyro; 
+    zOffset += zGyro; 
+  }
+  xOffset/=1000.0;
+  yOffset/=1000.0;
+  zOffset/=1000.0;
+}
+
+void readMpu(){
+  //readMpu();
+    //read acc data from mpu
+  Wire.beginTransmission(MpuAddr);
+  Wire.write(0x3B);
+  //check if any commu err in early stage
+  if(Wire.endTransmission(false)!=0){       //complete the write phase, without a STOP condition.
+    return;
+  }
+
+  if(Wire.requestFrom(MpuAddr, 6)!= 6){
+    Serial.print("readMpu err");
+    return;
+  }
+
+  uint8_t highBytes, lowBytes;
+
+  xAcc = combination16(highBytes, lowBytes)/16384.0;   //combination is freqently used. 
+  yAcc = combination16(highBytes, lowBytes)/16384.0;
+  zAcc = combination16(highBytes, lowBytes)/16384.0;
+
+
+  //read acc data from mpu
+  Wire.beginTransmission(MpuAddr);
+  Wire.write(0x43);
+  //check if any commu err in early stage
+  if(Wire.endTransmission(false)!=0){
+    return;
+  }
+
+  if(Wire.requestFrom(MpuAddr, 6)!= 6){
+    Serial.print("readMpu err");
+    return;
+  }
+
+  xGyro = combination16(highBytes, lowBytes)/131.0 ;
+  yGyro = combination16(highBytes, lowBytes)/131.0 ;
+  zGyro = combination16(highBytes, lowBytes)/131.0 ;
+}
+
+void writeReg(uint8_t addr, uint8_t value){
+  Wire.beginTransmission(MpuAddr);
+  Wire.write(addr);
+  Wire.write(value);
+  Wire.endTransmission(false);
+}
