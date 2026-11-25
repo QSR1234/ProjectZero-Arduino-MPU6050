@@ -21,14 +21,12 @@ int16_t combination16(uint8_t higher, uint8_t lower);
 void readMpu();
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(115200);
   Wire.begin();
   setUpMpu(); 
   elapsed=millis();
 
   servo_0.attach(signal);
- // servo_0.write(135);
 }
 
 void setUpMpu(){
@@ -39,9 +37,6 @@ void setUpMpu(){
   //cfg gyro scale range
   writeReg(0x1B, 0b00000000); //+-250 deg/s
 
-  // Set sample rate to 100 Hz
-// 1000 / (1 + 9) = 100 Hz
-  writeReg(0x19, 0x02);
   calcOffset();
 }
 
@@ -71,8 +66,8 @@ void loop() {
   //complementary filter.   to calibrate the drift of gyroscope accelerometer
   pitchAngle= weight*(pitchAngle + yGyro*(-1)*dt) + (1-weight)*accPitchAngle;
 
-  //output to servo_0, stabilizing at 135deg
-  servo_0.write(100+pitchAngle-1);   //135 now,  30=>165  -30=>105
+  //output to servo_0, stabilizing at 100deg
+  servo_0.write(100+pitchAngle);   
 
   Serial.print("accPitchAngle: ");
   Serial.print(accPitchAngle);
@@ -120,8 +115,7 @@ void calcOffset(){
 }
 
 void readMpu(){
-  //readMpu();
-    //read acc data from mpu
+  //read acc data from mpu
   Wire.beginTransmission(MpuAddr);
   Wire.write(0x3B);
   //check if any commu err in early stage
@@ -136,12 +130,12 @@ void readMpu(){
 
   uint8_t highBytes, lowBytes;
 
-  xAcc = combination16(highBytes, lowBytes)/16384.0;   //combination is freqently used. 
+  xAcc = combination16(highBytes, lowBytes)/16384.0;   
   yAcc = combination16(highBytes, lowBytes)/16384.0;
   zAcc = combination16(highBytes, lowBytes)/16384.0;
 
 
-  //read acc data from mpu
+  //read gyro data from mpu
   Wire.beginTransmission(MpuAddr);
   Wire.write(0x43);
   //check if any commu err in early stage
