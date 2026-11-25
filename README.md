@@ -1,2 +1,3 @@
-# ProjectZero-Arduino-MPU6050
-Arduino Uno MPU6050 accelerometer project
+# 0th_Project_one axis stabilized gimbal
+
+Arduino Uno + MPU6050 + servo motors & pan-tilt gimbal
